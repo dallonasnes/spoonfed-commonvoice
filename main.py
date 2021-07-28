@@ -108,9 +108,12 @@ def _get_word_frequency_map(sentences):
     return vocab_freq_map
 
 def _invert_ordered_dict(map):
+    # NB: CommonVoice has unique audio but many duplicate sentences
+    # this method drastically reduces number of sentences by changing hash table key
     rtn_val = OrderedDict()
     for key, value in map.items():
-        rtn_val[value] = key
+        if value not in rtn_val:
+            rtn_val[value] = key
     return rtn_val
 
 def _remove_dup_sentences(ordered_map):
