@@ -16,12 +16,9 @@ External setup:
 3. Leave Anki open (so that AnkiConnect server is running)
 """
 
-DIR_PATH = "persian-commonvoice/fa/"
 CLIPS_SUBPATH = "clips/"
 INPUT_TSV = "validated.tsv"
 ANKI_MEDIA_PATH = "/Users/dev/Library/Application Support/Anki2/User 1/collection.media/"
-LANGUAGE_NAME = "persian"
-LANG_CODE = "fa"
 
 """ This section copied from sample code here: https://github.com/FooSoft/anki-connect"""
 def request(action, **params):
@@ -97,16 +94,6 @@ def copy_files_to_anki_store(relative_audio_paths: List):
             copyfile(src_path, dest_path)
     print("FINISHED COPYING FILES TO ANKI MEDIA STORE")
 
-def _get_word_frequency_map(sentences):
-    vocab_freq_map = {}
-    for sentence in sentences:
-        for word in sentence.split():
-            if word in vocab_freq_map:
-                vocab_freq_map[word] += 1
-            else:
-                vocab_freq_map[word] = 1
-    return vocab_freq_map
-
 def _invert_ordered_dict(map):
     # NB: CommonVoice has unique audio but many duplicate sentences
     # this method drastically reduces number of sentences by changing hash table key
@@ -133,9 +120,11 @@ def _remove_dup_sentences(ordered_map):
 def _order_sentences_by_min_num_new_words(sentences):
     sentences_ordered_by_num_new_words = []
     unused_sentences = sentences.copy()
+    if MIN_SENTENCE_LENGTH > 1:
+        unused_sentences = list(filter(lambda x: len(x.split()) >= MIN_SENTENCE_LENGTH, unused_sentences))
     previously_seen_words = set()
-    print("BEGINNING TO APPLY ORDERING TO {0} SENTENCES".format(len(sentences)))
-    with tqdm(total=len(sentences)) as pbar:
+    print("BEGINNING TO APPLY ORDERING TO {0} SENTENCES".format(len(unused_sentences)))
+    with tqdm(total=len(unused_sentences)) as pbar:
         while len(unused_sentences) > 0:
             sentence_new_word_count_map = {}
             already_popped_sentence = False
@@ -189,7 +178,6 @@ def _order_sentences_by_num_new_words(deduped_ordered_map):
     return map_audio_to_sentence_ordered_by_min_new_words_in_sentence
 
 def apply_ordering_to_notes(map):
-    vocab_freq_map = _get_word_frequency_map(map.values())
     # order map by length of each sentence
     ordered_map = OrderedDict(sorted(map.items(), key=lambda t: len(t[1].split())))
     # reorder map by number of new words introduced in each sentence (compared to words previously seen)
@@ -217,5 +205,13 @@ def main():
 
 
 if __name__ == "__main__":
-    # TODO: read in dir path, lang name and lang code from CLI
+    global DIR_PATH
+    global LANGUAGE_NAME
+    global LANG_CODE
+    global MIN_SENTENCE_LENGTH
+    DIR_PATH = input("What is path to directory?\n").strip()
+    LANGUAGE_NAME = input("What is language name?\n").strip().lower()
+    LANG_CODE = input("What is language code?\n").strip().lower()
+    MIN_SENTENCE_LENGTH = int(input("What is the smallest sentence size to allow?\n").strip())
+
     main()
