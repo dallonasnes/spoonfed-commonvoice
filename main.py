@@ -6,7 +6,7 @@ from typing import List
 import urllib.request
 import urllib.parse
 from collections import OrderedDict
-import tqdm
+from tqdm import tqdm
 
 """
 External setup:
@@ -64,7 +64,8 @@ def format_google_translate_query(sentence, lang_code):
 def add_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lang_code):
     # note that if the note already exists, it won't be modified
     all_notes = []
-    for audio_path in audio_paths_ordered:
+    print("BEGINNING TO GENERATE NOTES FROM SENTENCES")
+    for audio_path in tqdm(audio_paths_ordered):
         sentence = map[audio_path]
         note = {
                     "deckName": deck_name,
@@ -77,7 +78,10 @@ def add_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lang_code):
                 }
         all_notes.append(note)
   
+    print("COMPLETED GENERATING NOTES FROM SENTENCES")
+    print("BEGINNING SYNCING NOTES TO ANKI")
     invoke('addNotes', notes=all_notes)
+    print("FINISHED SYNCING NOTES TO ANKI")
 
 def copy_files_to_anki_store(relative_audio_paths: List):
     """
@@ -127,41 +131,45 @@ def _order_sentences_by_min_num_new_words(sentences):
     sentences_ordered_by_num_new_words = []
     unused_sentences = sentences.copy()
     previously_seen_words = set()
-    while len(unused_sentences) > 0:
-        print(len(unused_sentences))
-        sentence_new_word_count_map = {}
-        already_popped_sentence = False
-        for sentence in unused_sentences:
-            new_word_count = 0
-            just_seen_words = set()
-            for word in sentence.split():
-                if word not in previously_seen_words and word not in just_seen_words:
-                    new_word_count += 1
-                    just_seen_words.add(word)
-            if new_word_count < 2:
-                # we found a sentence with zero or one new word, so we can add it right away
+    print("BEGINNING TO APPLY ORDERING TO {0} SENTENCES".format(len(sentences)))
+    with tqdm(total=len(sentences)) as pbar:
+        while len(unused_sentences) > 0:
+            sentence_new_word_count_map = {}
+            already_popped_sentence = False
+            for sentence in unused_sentences:
+                new_word_count = 0
+                just_seen_words = set()
+                for word in sentence.split():
+                    if word not in previously_seen_words and word not in just_seen_words:
+                        new_word_count += 1
+                        just_seen_words.add(word)
+                if new_word_count < 2:
+                    # we found a sentence with zero or one new word, so we can add it right away
+                    idx = unused_sentences.index(sentence)
+                    sentence = unused_sentences.pop(idx)
+                    sentences_ordered_by_num_new_words.append(sentence)
+                    for word in sentence.split():
+                        previously_seen_words.add(word)
+                    already_popped_sentence = True
+                    pbar.update(1)
+                    break #break out of for loop over unused_sentences
+                else:
+                    # need to get new_word_count of all unused_sentences
+                    sentence_new_word_count_map[sentence] = new_word_count
+            # now that we've checked all unused_sentences
+            # we can find the sentence with min new words and add to list
+            if not already_popped_sentence:
+                # first find sentence with min new word score
+                sentence, _ = min(sentence_new_word_count_map.items(), key=lambda x: x[1])
                 idx = unused_sentences.index(sentence)
                 sentence = unused_sentences.pop(idx)
                 sentences_ordered_by_num_new_words.append(sentence)
+                already_popped_sentence = True
                 for word in sentence.split():
                     previously_seen_words.add(word)
-                already_popped_sentence = True
-                break #break out of for loop over unused_sentences
-            else:
-                # need to get new_word_count of all unused_sentences
-                sentence_new_word_count_map[sentence] = new_word_count
-        # now that we've checked all unused_sentences
-        # we can find the sentence with min new words and add to list
-        if not already_popped_sentence:
-            # first find sentence with min new word score
-            sentence, _ = min(sentence_new_word_count_map.items(), key=lambda x: x[1])
-            idx = unused_sentences.index(sentence)
-            sentence = unused_sentences.pop(idx)
-            sentences_ordered_by_num_new_words.append(sentence)
-            already_popped_sentence = True
-            for word in sentence.split():
-                previously_seen_words.add(word)
+                pbar.update(1)
     
+    print("FINISHED APPLYING ORDERING TO SENTENCES")
     return sentences_ordered_by_num_new_words        
 
 def _build_map_audio_to_sentence_ordered_by_min_new_words_in_sentence(sentences_ordered_by_min_num_new_words, sentence_to_audio_map):
@@ -190,6 +198,7 @@ def apply_ordering_to_notes(map):
 def main():
     # read the csv into memory
     map = build_audio_path_to_sentence_map() # key is audio path, value is sentence
+    print("CSV INPUT HAS {0} ROWS".format(len(map.keys())))
 
     lang_code = LANG_CODE
     deck_name = 'CommonVoice::{0} Notes'.format(LANGUAGE_NAME)
@@ -199,7 +208,8 @@ def main():
         invoke('createDeck', deck=deck_name)
 
     audio_paths_ordered = apply_ordering_to_notes(map)
-    copy_files_to_anki_store(map.keys())
+    copy_files_to_anki_store(audio_paths_ordered.keys())
+    print("FILTERED MAP HAS {0} ROWS".format(len(audio_paths_ordered.keys())))
     add_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lang_code)
 
 
