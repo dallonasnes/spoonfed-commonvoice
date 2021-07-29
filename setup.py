@@ -1,21 +1,34 @@
 import setuptools
+import os
 
-with open("README.md", "r") as fh:
-    long_description = fh.read()
+this_directory = os.path.abspath(os.path.dirname(__file__))
+readme_path = os.path.join(this_directory, "README.md")
+with open(readme_path, encoding="utf-8") as handle:
+    long_description = handle.read()
+
+requires = (
+    "tqdm>=4.61.2",
+)
 
 setuptools.setup(
-    name="spoonfed-commonvoice",
-    version="0.0.1",
+    name="spoonfed_commonvoice",
+    version="0.0.2",
     author="Dallon Asnes",
     author_email="dallon.asnes@email.com",
     description="CLI to generate Anki notes from Mozilla CommonVoice Datasets for language study",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/dallonasnes/spoonfed-commonvoice",
+    entry_points={
+        "console_scripts": [
+            "cva=spoonfed_commonvoice.main:run",
+        ],
+    },
     packages=setuptools.find_packages(),
-    classifiers=(
+    install_requires=requires,
+    classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
-    ),
+    ],
 )

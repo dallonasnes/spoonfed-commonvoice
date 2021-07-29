@@ -1,13 +1,12 @@
-.PHONY: install
-install:
-	python3 setup.py install --user
-
-publish_test:
-	rm -rf dist
+.PHONY: clean
+build:
 	python3 setup.py sdist bdist_wheel
-	twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 
-publish_real:
+.PHONY: clean
+clean:
 	rm -rf dist
-	python3 setup.py sdist bdist_wheel
+	rm -rf build
+	rm -rf *.egg-info
+
+publish: clean build
 	twine upload dist/*

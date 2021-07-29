@@ -257,7 +257,7 @@ def parse_cli():
         print("You don't want any Anki notes made. Exiting.")
         sys.exit(0)
 
-def main():
+def run():
     parse_cli()
     # read the csv into memory
     map = build_audio_path_to_sentence_map() # key is audio path, value is sentence
@@ -283,4 +283,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run()
