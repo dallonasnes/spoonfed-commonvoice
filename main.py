@@ -6,6 +6,7 @@ from typing import List
 import urllib.request
 import urllib.parse
 from collections import OrderedDict
+import sys
 from tqdm import tqdm
 
 """
@@ -14,6 +15,8 @@ External setup:
 1. setup anki connect plugin on desktop anki installation
 2. create CommonVoice note deck type
 3. Leave Anki open (so that AnkiConnect server is running)
+4. pip install
+5. update /dev/ to be whatever their username is
 """
 
 CLIPS_SUBPATH = "clips/"
@@ -58,27 +61,74 @@ def format_google_translate_query(sentence, lang_code):
     url = "https://translate.google.com/?sl={0}&tl=en&text={1}&op=translate".format(lang_code, url_encoded_sentence)
     return url
 
-def add_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lang_code):
+
+def _get_cloze_for_sentence(sentence, word_freq_map):
+    # find least frequent word in sentence and make it a cloze
+    word_freqs = {}
+    for word in sentence.split():
+        word_freqs[word] = word_freq_map[word.strip().lower()]
+    # return key of word_freqs which has min value
+    least_freq_word, _ = min(word_freqs.items(), key=lambda x: x[1])
+    cloze_sentence = sentence.replace(least_freq_word, '{{c1::' + least_freq_word + '}}')
+    return cloze_sentence
+
+
+def _build_word_frequency_map(sentences):
+    map = {}
+    for sentence in sentences:
+        for word in sentence.split():
+            word = word.strip().lower()
+            if word in map:
+                map[word] += 1
+            else:
+                map[word] = 1
+    return map
+
+
+def add_listening_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lang_code):
     # note that if the note already exists, it won't be modified
     all_notes = []
-    print("BEGINNING TO GENERATE NOTES FROM SENTENCES")
+    word_frequency_map = _build_word_frequency_map(list(audio_paths_ordered.values()))
+    print("BEGINNING TO GENERATE LISTENING NOTES FROM SENTENCES")
     for audio_path in tqdm(audio_paths_ordered):
         sentence = map[audio_path]
         note = {
-                    "deckName": deck_name,
-                    "modelName": "CommonVoice note",
-                    "fields": {
-                        "Sentence": sentence,
-                        "Audio": '[sound:{0}]'.format(audio_path),
-                        "Translate Link": format_google_translate_query(sentence, lang_code)
-                    }
+                "deckName": deck_name,
+                "modelName": "CommonVoice cloze note",
+                "fields": {
+                    "Audio": '[sound:{0}]'.format(audio_path),
+                    "Sentence": _get_cloze_for_sentence(sentence, word_frequency_map),
+                    "Translate Link": format_google_translate_query(sentence, lang_code)
                 }
+            }
         all_notes.append(note)
   
-    print("COMPLETED GENERATING NOTES FROM SENTENCES")
-    print("BEGINNING SYNCING NOTES TO ANKI")
+    print("COMPLETED GENERATING LISTENING NOTES FROM SENTENCES")
+    print("BEGINNING SYNCING LISTENING NOTES TO ANKI")
     invoke('addNotes', notes=all_notes)
-    print("FINISHED SYNCING NOTES TO ANKI")
+    print("FINISHED SYNCING LISTENING NOTES TO ANKI")
+
+def add_reading_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lang_code):
+    # note that if the note already exists, it won't be modified
+    all_notes = []
+    print("BEGINNING TO GENERATE READING NOTES FROM SENTENCES")
+    for audio_path in tqdm(audio_paths_ordered):
+        sentence = map[audio_path]
+        note = {
+                "deckName": deck_name,
+                "modelName": "CommonVoice note",
+                "fields": {
+                    "Sentence": sentence,
+                    "Audio": '[sound:{0}]'.format(audio_path),
+                    "Translate Link": format_google_translate_query(sentence, lang_code)
+                }
+            }
+        all_notes.append(note)
+  
+    print("COMPLETED GENERATING READING NOTES FROM SENTENCES")
+    print("BEGINNING SYNCING READING NOTES TO ANKI")
+    invoke('addNotes', notes=all_notes)
+    print("FINISHED SYNCING READING NOTES TO ANKI")
 
 def copy_files_to_anki_store(relative_audio_paths: List):
     """
@@ -110,6 +160,7 @@ def _remove_dup_sentences(ordered_map):
     for key, sentence in ordered_map.items():
         has_unseen_words = False
         for word in sentence.split():
+            word = word.strip().lower()
             if word not in previously_seen_words:
                 has_unseen_words = True
                 previously_seen_words.add(word)
@@ -132,6 +183,7 @@ def _order_sentences_by_min_num_new_words(sentences):
                 new_word_count = 0
                 just_seen_words = set()
                 for word in sentence.split():
+                    word = word.strip().lower()
                     if word not in previously_seen_words and word not in just_seen_words:
                         new_word_count += 1
                         just_seen_words.add(word)
@@ -141,6 +193,7 @@ def _order_sentences_by_min_num_new_words(sentences):
                     sentence = unused_sentences.pop(idx)
                     sentences_ordered_by_num_new_words.append(sentence)
                     for word in sentence.split():
+                        word = word.strip().lower()
                         previously_seen_words.add(word)
                     already_popped_sentence = True
                     pbar.update(1)
@@ -158,6 +211,7 @@ def _order_sentences_by_min_num_new_words(sentences):
                 sentences_ordered_by_num_new_words.append(sentence)
                 already_popped_sentence = True
                 for word in sentence.split():
+                    word = word.strip().lower()
                     previously_seen_words.add(word)
                 pbar.update(1)
     
@@ -186,32 +240,47 @@ def apply_ordering_to_notes(map):
     deduped_ordered_audio_to_sentence_map = _remove_dup_sentences(map_ordered_by_num_new_words)
     return deduped_ordered_audio_to_sentence_map
 
+def parse_cli():
+    global DIR_PATH
+    global LANGUAGE_NAME
+    global LANG_CODE
+    global MIN_SENTENCE_LENGTH
+    global MAKE_READING_NOTES
+    global MAKE_LISTENING_NOTES
+    DIR_PATH = input("What is path to directory?\n").strip()
+    LANGUAGE_NAME = input("What is language name?\n").strip().lower()
+    LANG_CODE = input("What is language code?\n").strip().lower()
+    MIN_SENTENCE_LENGTH = int(input("What is the smallest sentence size to allow?\n").strip())
+    MAKE_READING_NOTES = input("Do you want reading notes? (y/n)\n").strip().lower()[0] == "y"
+    MAKE_LISTENING_NOTES = input("Do you want listening notes? (y/n)\n").strip().lower()[0] == "y"
+    if MAKE_READING_NOTES is False and MAKE_LISTENING_NOTES is False:
+        print("You don't want any Anki notes made. Exiting.")
+        sys.exit(0)
+
 def main():
+    parse_cli()
     # read the csv into memory
     map = build_audio_path_to_sentence_map() # key is audio path, value is sentence
     print("CSV INPUT HAS {0} ROWS".format(len(map.keys())))
 
     lang_code = LANG_CODE
-    deck_name = 'CommonVoice::{0} Notes'.format(LANGUAGE_NAME)
+    reading_deck_name = 'CommonVoice::{0} Reading Notes'.format(LANGUAGE_NAME)
+    listening_deck_name = 'CommonVoice::{0} Listening Notes'.format(LANGUAGE_NAME)
     # create deck if it doesn't already exist
     existing_decks = invoke('deckNames')
-    if deck_name not in existing_decks:
-        invoke('createDeck', deck=deck_name)
+    if reading_deck_name not in existing_decks:
+        invoke('createDeck', deck=reading_deck_name)
+    if listening_deck_name not in existing_decks:
+        invoke('createDeck', deck=listening_deck_name)
 
     audio_paths_ordered = apply_ordering_to_notes(map)
     copy_files_to_anki_store(audio_paths_ordered.keys())
     print("FILTERED MAP HAS {0} ROWS".format(len(audio_paths_ordered.keys())))
-    add_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lang_code)
+    if MAKE_READING_NOTES:
+        add_reading_notes_to_anki_connect(reading_deck_name, audio_paths_ordered, map, lang_code)
+    if MAKE_LISTENING_NOTES:
+        add_listening_notes_to_anki_connect(listening_deck_name, audio_paths_ordered, map, lang_code)
 
 
 if __name__ == "__main__":
-    global DIR_PATH
-    global LANGUAGE_NAME
-    global LANG_CODE
-    global MIN_SENTENCE_LENGTH
-    DIR_PATH = input("What is path to directory?\n").strip()
-    LANGUAGE_NAME = input("What is language name?\n").strip().lower()
-    LANG_CODE = input("What is language code?\n").strip().lower()
-    MIN_SENTENCE_LENGTH = int(input("What is the smallest sentence size to allow?\n").strip())
-
     main()
