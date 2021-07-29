@@ -1,3 +1,6 @@
+build/
+dist/
+spoonfed_commonvoice.egg-info/
 .*-commonvoice
 *.swp
 .DS_Store
