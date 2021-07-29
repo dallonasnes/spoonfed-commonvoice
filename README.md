@@ -5,7 +5,6 @@ I have commonvoice data - brief mp3 sentences and their transcription.
 I want to generate `Spoonfed<Language>`
 
 ## Remaining Goals (in no particular order)
-1. Make package (so people can just pip install)
 1. Parse correctly and pinyin for chinese
 1. A new word is not another conjugation of the same word
 1. Use google cloud translate api to make cards of english -> language
@@ -22,3 +21,4 @@ I want to generate `Spoonfed<Language>`
 1. Make separate decks for reading and listening(with cloze deletions)
 1. Build in cloze deletions
 1. Make comparisons lowercase and stripped (but not output text)
+1. Make package (so people can just pip install)
