@@ -12,9 +12,9 @@ requires = (
 
 setuptools.setup(
     name="spoonfed_commonvoice",
-    version="0.0.2",
+    version="0.0.3",
     author="Dallon Asnes",
-    author_email="dallon.asnes@email.com",
+    author_email="dallon.asnes@gmail.com",
     description="CLI to generate Anki notes from Mozilla CommonVoice Datasets for language study",
     long_description=long_description,
     long_description_content_type="text/markdown",

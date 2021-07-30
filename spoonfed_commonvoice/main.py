@@ -9,16 +9,6 @@ from collections import OrderedDict
 import sys
 from tqdm import tqdm
 
-"""
-External setup:
-0. Download and unzip CommonVoice file
-1. setup anki connect plugin on desktop anki installation
-2. create CommonVoice note deck type
-3. Leave Anki open (so that AnkiConnect server is running)
-4. pip install
-5. update /dev/ to be whatever their username is
-"""
-
 CLIPS_SUBPATH = "clips/"
 INPUT_TSV = "validated.tsv"
 ANKI_MEDIA_PATH = "/Users/dev/Library/Application Support/Anki2/User 1/collection.media/"

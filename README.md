@@ -1,26 +1,32 @@
-# Spoonfed<Language>
-## What is this?
+# Spoonfed CommonVoice
 
-I have commonvoice data - brief mp3 sentences and their transcription.
-I want to generate `Spoonfed<Language>`
+Command line interface useful for foreign language learning that generates flash cards to practice reading and listening comprehension from [Mozilla's CommonVoice](https://commonvoice.mozilla.org/en/datasets) multi-language voice dataset and creates notes that sync with [Anki](https://apps.ankiweb.net/).
 
-## Remaining Goals (in no particular order)
-1. Update makefile to match MVT
-1. update setup to match MVT -- test that can use as CLI
-1. Parse correctly and pinyin for chinese
-1. A new word is not another conjugation of the same word
-1. Use google cloud translate api to make cards of english -> language
-1. Api to handle and process compressed file
-1. Read deck state from AnkiConnect to highlight/prioritize unknown words
-1. Web app
+While some apps already feature flash cards that have extensive audio and transcription data, their data doesn't include many languages and their process of curating datasets is expensive. CommonVoice has more data in more languages and will continue to grow.
+
+## How to use these cards
+Each card pairs speech audio with the transcript of what was said (validated by the contributors to the CommonVoice project).
+
+Improve listening comprehension by reading the transcription only after listening to the audio and filling in the [cloze deletion](https://www.ollielovell.com/edtech/anki3/) card.
 
 
-### Completed goals
-1. Generate anki cards - play the audio on one side, then check audio recognition.
-1. Add button hyperlink to google translate for sentence
-1. Sync to Anki with AnkiConnect
-1. Ordering such that each sentence introduces exactly 1 new word
-1. Make separate decks for reading and listening(with cloze deletions)
-1. Build in cloze deletions
-1. Make comparisons lowercase and stripped (but not output text)
-1. Make package (so people can just pip install)
+Improve pronunciation by reading a sentence out loud and then listen to speech.
+
+## Features
+
+- Syncs to Anki with AnkiConnect
+- Cards are ordered such that only one new word is introduced at a time
+- Separate deck for listening practice includes cloze deletions
+
+## How to Use
+
+1. Run `pip install spoonfed-commonvoice`
+1. Download and unzip CommonVoice file
+1. Setup [Anki Connect Plugin](https://ankiweb.net/shared/info/2055492159) on Desktop Anki installation
+1. Create CommonVoice reading and listening decks in Anki
+    - `CommonVoice note` with fields `Sentence, Audio, Translate Link`
+    - `CommonVoice cloze note` with fields `Audio, Sentence, Translate Link`
+
+
+1. Leave Anki open (so that AnkiConnect server is running)
+1. Run `cva` and answer config questions in prompt
