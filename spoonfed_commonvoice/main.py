@@ -1,5 +1,6 @@
 import csv
 import json
+import os
 import os.path
 from shutil import copyfile
 from typing import List
@@ -9,9 +10,8 @@ from collections import OrderedDict
 import sys
 from tqdm import tqdm
 
-CLIPS_SUBPATH = "clips/"
-INPUT_TSV = "validated.tsv"
-ANKI_MEDIA_PATH = "/Users/dev/Library/Application Support/Anki2/User 1/collection.media/"
+
+ANKI_MEDIA_PATH = "/".join(os.getcwd().split('/')[0:3]) + "/Library/Application Support/Anki2/User 1/collection.media/"
 
 """ This section copied from sample code here: https://github.com/FooSoft/anki-connect"""
 def request(action, **params):
@@ -33,7 +33,7 @@ def invoke(action, **params):
 
 def build_audio_path_to_sentence_map():
     map = {}
-    with open(DIR_PATH + INPUT_TSV) as csv_file:
+    with open(VALIDATED_TSV_PATH) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter='\t')
         line_count = 0
         for row in csv_reader:
@@ -130,7 +130,7 @@ def copy_files_to_anki_store(relative_audio_paths: List):
     for audio_name in tqdm(relative_audio_paths):
         dest_path = ANKI_MEDIA_PATH + audio_name
         if not os.path.isfile(dest_path):
-            src_path = DIR_PATH + CLIPS_SUBPATH + audio_name
+            src_path = AUDIO_DIR_PATH + audio_name
             copyfile(src_path, dest_path)
     print("FINISHED COPYING FILES TO ANKI MEDIA STORE")
 
@@ -231,13 +231,15 @@ def apply_ordering_to_notes(map):
     return deduped_ordered_audio_to_sentence_map
 
 def parse_cli():
-    global DIR_PATH
+    global AUDIO_DIR_PATH
+    global VALIDATED_TSV_PATH
     global LANGUAGE_NAME
     global LANG_CODE
     global MIN_SENTENCE_LENGTH
     global MAKE_READING_NOTES
     global MAKE_LISTENING_NOTES
-    DIR_PATH = input("What is path to directory?\n").strip()
+    AUDIO_DIR_PATH = input("What is path to audio directory? (end with a /)\n").strip()
+    VALIDATED_TSV_PATH = input("What is path to validated tsv file?\n").strip()
     LANGUAGE_NAME = input("What is language name?\n").strip().lower()
     LANG_CODE = input("What is language code?\n").strip().lower()
     MIN_SENTENCE_LENGTH = int(input("What is the smallest sentence size to allow?\n").strip())
