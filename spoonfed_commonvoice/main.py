@@ -33,7 +33,8 @@ def invoke(action, **params):
 
 def build_audio_path_to_sentence_map():
     map = {}
-    with open(VALIDATED_TSV_PATH) as csv_file:
+    is_validated_file = "validated" in TSV_PATH.lower()
+    with open(TSV_PATH) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter='\t')
         line_count = 0
         for row in csv_reader:
@@ -43,7 +44,10 @@ def build_audio_path_to_sentence_map():
             else:
                 audio_path = row[1]
                 sentence = row[2]
-                map[audio_path] = sentence
+                up_votes = row[3]
+                down_votes = row[4]
+                if is_validated_file or (up_votes > 0 and down_votes == 0):
+                    map[audio_path] = sentence
     return map
 
 def format_google_translate_query(sentence, lang_code):
@@ -232,14 +236,14 @@ def apply_ordering_to_notes(map):
 
 def parse_cli():
     global AUDIO_DIR_PATH
-    global VALIDATED_TSV_PATH
+    global TSV_PATH
     global LANGUAGE_NAME
     global LANG_CODE
     global MIN_SENTENCE_LENGTH
     global MAKE_READING_NOTES
     global MAKE_LISTENING_NOTES
     AUDIO_DIR_PATH = input("What is path to audio directory? (end with a /)\n").strip()
-    VALIDATED_TSV_PATH = input("What is path to validated tsv file?\n").strip()
+    TSV_PATH = input("What is path to validated tsv file?\n").strip()
     LANGUAGE_NAME = input("What is language name?\n").strip().lower()
     LANG_CODE = input("What is language code?\n").strip().lower()
     MIN_SENTENCE_LENGTH = int(input("What is the smallest sentence size to allow?\n").strip())
