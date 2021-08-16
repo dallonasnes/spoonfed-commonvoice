@@ -8,6 +8,7 @@ import urllib.request
 import urllib.parse
 from collections import OrderedDict
 import sys
+import string
 from tqdm import tqdm
 
 
@@ -31,6 +32,13 @@ def invoke(action, **params):
     return response['result']
 """End section copied from anki-connect github"""
 
+def _filter_out_punctuation(sentence):
+    cleansed_sentence = '%s' % sentence # copy the same string
+    for word in sentence.split():
+        if word in string.punctuation or word in ['،', '؟']:
+            cleansed_sentence = cleansed_sentence.replace(word, '').strip()
+    return cleansed_sentence.strip()
+
 def build_audio_path_to_sentence_map():
     map = {}
     is_validated_file = "validated" in TSV_PATH.lower()
@@ -43,7 +51,7 @@ def build_audio_path_to_sentence_map():
                 line_count += 1
             else:
                 audio_path = row[1]
-                sentence = row[2]
+                sentence = _filter_out_punctuation(row[2])
                 up_votes = row[3]
                 down_votes = row[4]
                 if is_validated_file or (up_votes > 0 and down_votes == 0):
@@ -162,6 +170,39 @@ def _remove_dup_sentences(ordered_map):
             deduped_ordered_map[key] = sentence
     return deduped_ordered_map
 
+def _is_new_word_misspelling_of_old_word(just_seen_words, previously_seen_words):
+    """Compares the new word in the new sentence to each of the previously seen words
+    If the new word is only one character off from any previous word, we assume it is a misspelling or pluralization
+    """
+    # compare current word to all previously seen words to check if just a misspelling
+    # do this buy building map of char freq and if there is only one char diff then skip this one
+
+    new_word = list(just_seen_words)[0]
+    new_word_char_freq = {}
+    for char in new_word:
+        if char in new_word_char_freq:
+            new_word_char_freq[char] += 1
+        else:
+            new_word_char_freq[char] = 1
+    # filter down to words of the same length
+    for previous_word in list(filter(lambda prev_word: len(prev_word) == len(new_word), previously_seen_words)):
+        prev_word_char_freq = {}
+        for char in previous_word:
+            if char in prev_word_char_freq:
+                prev_word_char_freq[char] += 1
+            else:
+                prev_word_char_freq[char] = 1
+        # now subtract previous chars from new char map
+        # if only one char remains in new char map, then skip this sentence
+        # because the new word in the sentence is only one char different from the previous word
+        for char in prev_word_char_freq.keys():
+            if char in new_word_char_freq:
+                new_word_char_freq[char] -= 1
+        total_new_chars_in_new_word = sum(new_word_char_freq.values())
+        if total_new_chars_in_new_word == 1:
+            return True
+    return False
+
 def _order_sentences_by_min_num_new_words(sentences):
     sentences_ordered_by_num_new_words = []
     unused_sentences = sentences.copy()
@@ -181,11 +222,21 @@ def _order_sentences_by_min_num_new_words(sentences):
                     if word not in previously_seen_words and word not in just_seen_words:
                         new_word_count += 1
                         just_seen_words.add(word)
-                if new_word_count < 2:
-                    # we found a sentence with zero or one new word, so we can add it right away
+                if new_word_count == 0:
+                    # we found a sentence with zero new words, so we can get rid of it and keep going
+                    idx = unused_sentences.index(sentence)
+                    _ = unused_sentences.pop(idx)
+                    already_popped_sentence = True
+                    pbar.update(1)
+                    break #break out of for loop over unused_sentences
+                elif new_word_count == 1:
+                    # we found a sentence with exactly one new word
+                    # if the new word likely isn't a misspelling, then add it
                     idx = unused_sentences.index(sentence)
                     sentence = unused_sentences.pop(idx)
-                    sentences_ordered_by_num_new_words.append(sentence)
+                    
+                    if not _is_new_word_misspelling_of_old_word(just_seen_words, previously_seen_words):
+                        sentences_ordered_by_num_new_words.append(sentence)
                     for word in sentence.split():
                         word = word.strip().lower()
                         previously_seen_words.add(word)
