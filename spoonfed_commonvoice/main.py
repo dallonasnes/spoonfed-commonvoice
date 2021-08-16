@@ -121,7 +121,7 @@ def add_reading_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lang_
   
     print("COMPLETED GENERATING READING NOTES FROM SENTENCES")
     print("BEGINNING SYNCING READING NOTES TO ANKI")
-    invoke('addNotes', notes=all_notes)
+    invoke('addNotes', notes=all_notes[:MAX_NUMBER_OF_CARDS])
     print("FINISHED SYNCING READING NOTES TO ANKI")
 
 def copy_files_to_anki_store(relative_audio_paths: List):
@@ -242,13 +242,24 @@ def parse_cli():
     global MIN_SENTENCE_LENGTH
     global MAKE_READING_NOTES
     global MAKE_LISTENING_NOTES
-    AUDIO_DIR_PATH = input("What is path to audio directory? (end with a /)\n").strip()
-    TSV_PATH = input("What is path to validated tsv file?\n").strip()
-    LANGUAGE_NAME = input("What is language name?\n").strip().lower()
-    LANG_CODE = input("What is language code?\n").strip().lower()
-    MIN_SENTENCE_LENGTH = int(input("What is the smallest sentence size to allow?\n").strip())
-    MAKE_READING_NOTES = input("Do you want reading notes? (y/n)\n").strip().lower()[0] == "y"
-    MAKE_LISTENING_NOTES = input("Do you want listening notes? (y/n)\n").strip().lower()[0] == "y"
+    global MAX_NUMBER_OF_CARDS
+    # AUDIO_DIR_PATH = input("What is path to audio directory? (end with a /)\n").strip()
+    # TSV_PATH = input("What is path to validated tsv file?\n").strip()
+    # LANGUAGE_NAME = input("What is language name?\n").strip().lower()
+    # LANG_CODE = input("What is language code?\n").strip().lower()
+    # MIN_SENTENCE_LENGTH = int(input("What is the smallest sentence size to allow?\n").strip())
+    # MAKE_READING_NOTES = input("Do you want reading notes? (y/n)\n").strip().lower()[0] == "y"
+    # MAKE_LISTENING_NOTES = input("Do you want listening notes? (y/n)\n").strip().lower()[0] == "y"
+    args = sys.argv
+    AUDIO_DIR_PATH = args[1].strip()
+    TSV_PATH = args[2].strip()
+    LANGUAGE_NAME = args[3].strip().lower()
+    LANG_CODE = args[4].strip().lower()
+    MIN_SENTENCE_LENGTH = int(args[5].strip())
+    MAKE_READING_NOTES = args[6].strip().lower()[0] == "y"
+    MAKE_LISTENING_NOTES = args[7].strip().lower()[0] == "y"
+    MAX_NUMBER_OF_CARDS = int(args[8].strip())
+
     if MAKE_READING_NOTES is False and MAKE_LISTENING_NOTES is False:
         print("You don't want any Anki notes made. Exiting.")
         sys.exit(0)

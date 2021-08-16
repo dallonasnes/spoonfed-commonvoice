@@ -4,3 +4,7 @@ spoonfed_commonvoice.egg-info/
 .*-commonvoice
 *.swp
 .DS_Store
+spoonfed_commonvoice/data/
+*.mp3
+*.tsv
+*.tar
