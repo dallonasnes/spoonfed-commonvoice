@@ -174,9 +174,9 @@ def _is_new_word_misspelling_of_old_word(just_seen_words, previously_seen_words)
     """Compares the new word in the new sentence to each of the previously seen words
     If the new word is only one character off from any previous word, we assume it is a misspelling or pluralization
     """
+    # TODO: this didn't work to distinguish kheyli from kheyli with arabic ys
     # compare current word to all previously seen words to check if just a misspelling
     # do this buy building map of char freq and if there is only one char diff then skip this one
-
     new_word = list(just_seen_words)[0]
     new_word_char_freq = {}
     for char in new_word:
@@ -322,8 +322,8 @@ def run():
     print("CSV INPUT HAS {0} ROWS".format(len(map.keys())))
 
     lang_code = LANG_CODE
-    reading_deck_name = 'CommonVoice::{0} Reading Notes'.format(LANGUAGE_NAME)
-    listening_deck_name = 'CommonVoice::{0} Listening Notes'.format(LANGUAGE_NAME)
+    reading_deck_name = 'CommonVoice::{0}::Reading Notes'.format(LANGUAGE_NAME)
+    listening_deck_name = 'CommonVoice::{0}::Listening Notes'.format(LANGUAGE_NAME)
     # create deck if it doesn't already exist
     existing_decks = invoke('deckNames')
     if reading_deck_name not in existing_decks:
