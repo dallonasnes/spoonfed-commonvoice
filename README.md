@@ -18,7 +18,7 @@ Improve pronunciation by reading a sentence out loud and then listen to speech.
 - Cards are ordered such that only one new word is introduced at a time
 - Separate deck for listening practice includes cloze deletions
 
-## How to Use
+## How to Use pip package (main is not a release branch)
 
 1. Run `pip install spoonfed-commonvoice`
 1. Download and unzip CommonVoice file
