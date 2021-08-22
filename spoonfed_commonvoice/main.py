@@ -39,10 +39,10 @@ def _filter_out_punctuation(sentence):
             cleansed_sentence = cleansed_sentence.replace(word, '').strip()
     return cleansed_sentence.strip()
 
-def build_audio_path_to_sentence_map():
-    map = {}
-    is_validated_file = "validated" in TSV_PATH.lower()
-    with open(TSV_PATH) as csv_file:
+def build_audio_path_to_sentence_map(args):
+    data_map = {}
+    is_validated_file = "validated" in args.tsv.lower()
+    with open(args.tsv) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter='\t')
         line_count = 0
         for row in csv_reader:
@@ -55,8 +55,8 @@ def build_audio_path_to_sentence_map():
                 up_votes = row[3]
                 down_votes = row[4]
                 if is_validated_file or (up_votes > 0 and down_votes == 0):
-                    map[audio_path] = sentence
-    return map
+                    data_map[audio_path] = sentence
+    return data_map
 
 def format_google_translate_query(sentence, lang_code):
     url_encoded_sentence = urllib.parse.quote(sentence)
@@ -110,12 +110,12 @@ def add_listening_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lan
     invoke('addNotes', notes=all_notes)
     print("FINISHED SYNCING LISTENING NOTES TO ANKI")
 
-def add_reading_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lang_code):
+def add_reading_notes_to_anki_connect(deck_name, audio_paths_ordered, data_map, lang_code):
     # note that if the note already exists, it won't be modified
     all_notes = []
     print("BEGINNING TO GENERATE READING NOTES FROM SENTENCES")
     for audio_path in tqdm(audio_paths_ordered):
-        sentence = map[audio_path]
+        sentence = data_map[audio_path]
         note = {
                 "deckName": deck_name,
                 "modelName": "CommonVoice note",
@@ -129,10 +129,10 @@ def add_reading_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lang_
   
     print("COMPLETED GENERATING READING NOTES FROM SENTENCES")
     print("BEGINNING SYNCING READING NOTES TO ANKI")
-    invoke('addNotes', notes=all_notes[:MAX_NUMBER_OF_CARDS])
+    invoke('addNotes', notes=all_notes)
     print("FINISHED SYNCING READING NOTES TO ANKI")
 
-def copy_files_to_anki_store(relative_audio_paths: List):
+def copy_files_to_anki_store(relative_audio_paths: List, args):
     """
         For each audio file,
         first check if file exists in Anki store,
@@ -142,7 +142,7 @@ def copy_files_to_anki_store(relative_audio_paths: List):
     for audio_name in tqdm(relative_audio_paths):
         dest_path = ANKI_MEDIA_PATH + audio_name
         if not os.path.isfile(dest_path):
-            src_path = AUDIO_DIR_PATH + audio_name
+            src_path = args.audio + audio_name
             copyfile(src_path, dest_path)
     print("FINISHED COPYING FILES TO ANKI MEDIA STORE")
 
@@ -154,21 +154,6 @@ def _invert_ordered_dict(map):
         if value not in rtn_val:
             rtn_val[value] = key
     return rtn_val
-
-def _remove_dup_sentences(ordered_map):
-    """Remove any sentences that don't introduce new words"""
-    deduped_ordered_map = OrderedDict()
-    previously_seen_words = set()
-    for key, sentence in ordered_map.items():
-        has_unseen_words = False
-        for word in sentence.split():
-            word = word.strip().lower()
-            if word not in previously_seen_words:
-                has_unseen_words = True
-                previously_seen_words.add(word)
-        if has_unseen_words:
-            deduped_ordered_map[key] = sentence
-    return deduped_ordered_map
 
 def _is_new_word_misspelling_of_old_word(just_seen_words, previously_seen_words):
     """Compares the new word in the new sentence to each of the previously seen words
@@ -203,15 +188,17 @@ def _is_new_word_misspelling_of_old_word(just_seen_words, previously_seen_words)
             return True
     return False
 
-def _order_sentences_by_min_num_new_words(sentences):
+def _order_sentences_by_min_num_new_words(sentences, min_sentence_length, max_card_count):
     sentences_ordered_by_num_new_words = []
-    unused_sentences = sentences.copy()
-    if MIN_SENTENCE_LENGTH > 1:
-        unused_sentences = list(filter(lambda x: len(x.split()) >= MIN_SENTENCE_LENGTH, unused_sentences))
+    sentences_ordered_count = 0
+    unused_sentences_init = sentences.copy()
+    if min_sentence_length > 1:
+        unused_sentences_unsorted = list(filter(lambda x: len(x.split()) >= min_sentence_length, unused_sentences_init))
+        unused_sentences = sorted(unused_sentences_unsorted, key=len)
     previously_seen_words = set()
     print("BEGINNING TO APPLY ORDERING TO {0} SENTENCES".format(len(unused_sentences)))
-    with tqdm(total=len(unused_sentences)) as pbar:
-        while len(unused_sentences) > 0:
+    with tqdm(total=max_card_count) as pbar:
+        while sentences_ordered_count < max_card_count and len(unused_sentences) > 0:
             sentence_new_word_count_map = {}
             already_popped_sentence = False
             for sentence in unused_sentences:
@@ -227,7 +214,6 @@ def _order_sentences_by_min_num_new_words(sentences):
                     idx = unused_sentences.index(sentence)
                     _ = unused_sentences.pop(idx)
                     already_popped_sentence = True
-                    pbar.update(1)
                     break #break out of for loop over unused_sentences
                 elif new_word_count == 1:
                     # we found a sentence with exactly one new word
@@ -237,11 +223,12 @@ def _order_sentences_by_min_num_new_words(sentences):
                     
                     if not _is_new_word_misspelling_of_old_word(just_seen_words, previously_seen_words):
                         sentences_ordered_by_num_new_words.append(sentence)
+                        sentences_ordered_count += 1
+                        pbar.update(1)
                     for word in sentence.split():
                         word = word.strip().lower()
                         previously_seen_words.add(word)
                     already_popped_sentence = True
-                    pbar.update(1)
                     break #break out of for loop over unused_sentences
                 else:
                     # need to get new_word_count of all unused_sentences
@@ -254,11 +241,12 @@ def _order_sentences_by_min_num_new_words(sentences):
                 idx = unused_sentences.index(sentence)
                 sentence = unused_sentences.pop(idx)
                 sentences_ordered_by_num_new_words.append(sentence)
+                sentences_ordered_count += 1
+                pbar.update(1)
                 already_popped_sentence = True
                 for word in sentence.split():
                     word = word.strip().lower()
                     previously_seen_words.add(word)
-                pbar.update(1)
     
     print("FINISHED APPLYING ORDERING TO SENTENCES")
     return sentences_ordered_by_num_new_words        
@@ -270,30 +258,20 @@ def _build_map_audio_to_sentence_ordered_by_min_new_words_in_sentence(sentences_
         rtn_val[audio_path] = sentence
     return rtn_val
 
-def _order_sentences_by_num_new_words(deduped_ordered_map):
+def _order_sentences_by_num_new_words(deduped_ordered_map, min_sentence_length, max_card_count):
     sentence_to_audio_map = _invert_ordered_dict(deduped_ordered_map)
-    sentences_ordered_by_min_num_new_words = _order_sentences_by_min_num_new_words(list(sentence_to_audio_map.keys()))
+    sentences_ordered_by_min_num_new_words = _order_sentences_by_min_num_new_words(list(sentence_to_audio_map.keys()), min_sentence_length, max_card_count)
     map_audio_to_sentence_ordered_by_min_new_words_in_sentence = _build_map_audio_to_sentence_ordered_by_min_new_words_in_sentence(sentences_ordered_by_min_num_new_words, sentence_to_audio_map)
     return map_audio_to_sentence_ordered_by_min_new_words_in_sentence
 
-def apply_ordering_to_notes(map):
+def apply_ordering_to_notes(data_map, min_sentence_length, max_card_count):
     # order map by length of each sentence
-    ordered_map = OrderedDict(sorted(map.items(), key=lambda t: len(t[1].split())))
+    ordered_map = OrderedDict(sorted(data_map.items(), key=lambda t: len(t[1].split())))
     # reorder map by number of new words introduced in each sentence (compared to words previously seen)
-    map_ordered_by_num_new_words = _order_sentences_by_num_new_words(ordered_map)
-    # remove all sentences that intro 0 new words
-    deduped_ordered_audio_to_sentence_map = _remove_dup_sentences(map_ordered_by_num_new_words)
-    return deduped_ordered_audio_to_sentence_map
+    map_ordered_by_num_new_words = _order_sentences_by_num_new_words(ordered_map, min_sentence_length, max_card_count)
+    return map_ordered_by_num_new_words
 
 def parse_cli():
-    global AUDIO_DIR_PATH
-    global TSV_PATH
-    global LANGUAGE_NAME
-    global LANG_CODE
-    global MIN_SENTENCE_LENGTH
-    global MAKE_READING_NOTES
-    global MAKE_LISTENING_NOTES
-    global MAX_NUMBER_OF_CARDS
 
     parser = argparse.ArgumentParser(description='Spoonfed CommonVoice CLI.')
     parser.add_argument("audio", help="path to audio directory (should end with /)")
@@ -305,37 +283,30 @@ def parse_cli():
     parser.add_argument("-l", "--listen", help="make a deck for listening practice as well", action="store_true")
 
     args = parser.parse_args()
-    AUDIO_DIR_PATH = args.audio
-    TSV_PATH = args.tsv
-    LANGUAGE_NAME = args.lang_name
-    LANG_CODE = args.lang_code
-    MIN_SENTENCE_LENGTH = args.length
-    MAX_NUMBER_OF_CARDS = args.count
-    MAKE_LISTENING_NOTES = args.listen == None
+    return args
 
 def run():
-    parse_cli()
+    args = parse_cli()
     # read the csv into memory
-    map = build_audio_path_to_sentence_map() # key is audio path, value is sentence
-    print("CSV INPUT HAS {0} ROWS".format(len(map.keys())))
+    data_map = build_audio_path_to_sentence_map(args) # key is audio path, value is sentence
+    print("CSV INPUT HAS {0} ROWS".format(len(data_map.keys())))
 
-    lang_code = LANG_CODE
-    reading_deck_name = 'CommonVoice::{0}::Reading Notes'.format(LANGUAGE_NAME)
+    reading_deck_name = 'CommonVoice::{0}::Reading Notes'.format(args.lang_name)
     # create deck if it doesn't already exist
     existing_decks = invoke('deckNames')
     if reading_deck_name not in existing_decks:
         invoke('createDeck', deck=reading_deck_name)
 
-    audio_paths_ordered = apply_ordering_to_notes(map)
-    copy_files_to_anki_store(audio_paths_ordered.keys())
+    audio_paths_ordered = apply_ordering_to_notes(data_map, args.length, args.count)
+    copy_files_to_anki_store(audio_paths_ordered.keys(), args)
     print("FILTERED MAP HAS {0} ROWS".format(len(audio_paths_ordered.keys())))
     # always make reading notes
-    add_reading_notes_to_anki_connect(reading_deck_name, audio_paths_ordered, map, lang_code)
-    if MAKE_LISTENING_NOTES:
-        listening_deck_name = 'CommonVoice::{0}::Listening Notes'.format(LANGUAGE_NAME)
+    add_reading_notes_to_anki_connect(reading_deck_name, audio_paths_ordered, data_map, args.lang_code)
+    if args.listen:
+        listening_deck_name = 'CommonVoice::{0}::Listening Notes'.format(args.lang_name)
         if listening_deck_name not in existing_decks:
             invoke('createDeck', deck=listening_deck_name)
-        add_listening_notes_to_anki_connect(listening_deck_name, audio_paths_ordered, map, lang_code)
+        add_listening_notes_to_anki_connect(listening_deck_name, audio_paths_ordered, data_map, args.lang_code)
 
 
 if __name__ == "__main__":
