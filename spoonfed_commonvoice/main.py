@@ -7,8 +7,8 @@ from typing import List
 import urllib.request
 import urllib.parse
 from collections import OrderedDict
-import sys
 import string
+import argparse
 from tqdm import tqdm
 
 
@@ -294,26 +294,24 @@ def parse_cli():
     global MAKE_READING_NOTES
     global MAKE_LISTENING_NOTES
     global MAX_NUMBER_OF_CARDS
-    # AUDIO_DIR_PATH = input("What is path to audio directory? (end with a /)\n").strip()
-    # TSV_PATH = input("What is path to validated tsv file?\n").strip()
-    # LANGUAGE_NAME = input("What is language name?\n").strip().lower()
-    # LANG_CODE = input("What is language code?\n").strip().lower()
-    # MIN_SENTENCE_LENGTH = int(input("What is the smallest sentence size to allow?\n").strip())
-    # MAKE_READING_NOTES = input("Do you want reading notes? (y/n)\n").strip().lower()[0] == "y"
-    # MAKE_LISTENING_NOTES = input("Do you want listening notes? (y/n)\n").strip().lower()[0] == "y"
-    args = sys.argv
-    AUDIO_DIR_PATH = args[1].strip()
-    TSV_PATH = args[2].strip()
-    LANGUAGE_NAME = args[3].strip().lower()
-    LANG_CODE = args[4].strip().lower()
-    MIN_SENTENCE_LENGTH = int(args[5].strip())
-    MAKE_READING_NOTES = args[6].strip().lower()[0] == "y"
-    MAKE_LISTENING_NOTES = args[7].strip().lower()[0] == "y"
-    MAX_NUMBER_OF_CARDS = int(args[8].strip())
 
-    if MAKE_READING_NOTES is False and MAKE_LISTENING_NOTES is False:
-        print("You don't want any Anki notes made. Exiting.")
-        sys.exit(0)
+    parser = argparse.ArgumentParser(description='Spoonfed CommonVoice CLI.')
+    parser.add_argument("audio", help="path to audio directory (should end with /)")
+    parser.add_argument("tsv", help="path to tsv file")
+    parser.add_argument("lang_name", help="language name")
+    parser.add_argument("lang_code", help="Two letter code used by Google Translate to identify a language")
+    parser.add_argument("length", help="minimum length of sentences to include in deck", type=int)
+    parser.add_argument("count", help="max number of cards to include in deck", type=int)
+    parser.add_argument("-l", "--listen", help="make a deck for listening practice as well", action="store_true")
+
+    args = parser.parse_args()
+    AUDIO_DIR_PATH = args.audio
+    TSV_PATH = args.tsv
+    LANGUAGE_NAME = args.lang_name
+    LANG_CODE = args.lang_code
+    MIN_SENTENCE_LENGTH = args.length
+    MAX_NUMBER_OF_CARDS = args.count
+    MAKE_LISTENING_NOTES = args.listen == None
 
 def run():
     parse_cli()
@@ -323,20 +321,20 @@ def run():
 
     lang_code = LANG_CODE
     reading_deck_name = 'CommonVoice::{0}::Reading Notes'.format(LANGUAGE_NAME)
-    listening_deck_name = 'CommonVoice::{0}::Listening Notes'.format(LANGUAGE_NAME)
     # create deck if it doesn't already exist
     existing_decks = invoke('deckNames')
     if reading_deck_name not in existing_decks:
         invoke('createDeck', deck=reading_deck_name)
-    if listening_deck_name not in existing_decks:
-        invoke('createDeck', deck=listening_deck_name)
 
     audio_paths_ordered = apply_ordering_to_notes(map)
     copy_files_to_anki_store(audio_paths_ordered.keys())
     print("FILTERED MAP HAS {0} ROWS".format(len(audio_paths_ordered.keys())))
-    if MAKE_READING_NOTES:
-        add_reading_notes_to_anki_connect(reading_deck_name, audio_paths_ordered, map, lang_code)
+    # always make reading notes
+    add_reading_notes_to_anki_connect(reading_deck_name, audio_paths_ordered, map, lang_code)
     if MAKE_LISTENING_NOTES:
+        listening_deck_name = 'CommonVoice::{0}::Listening Notes'.format(LANGUAGE_NAME)
+        if listening_deck_name not in existing_decks:
+            invoke('createDeck', deck=listening_deck_name)
         add_listening_notes_to_anki_connect(listening_deck_name, audio_paths_ordered, map, lang_code)
 
 
