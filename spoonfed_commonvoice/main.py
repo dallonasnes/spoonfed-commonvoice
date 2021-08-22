@@ -76,24 +76,24 @@ def _get_cloze_for_sentence(sentence, word_freq_map):
 
 
 def _build_word_frequency_map(sentences):
-    map = {}
+    data_map = {}
     for sentence in sentences:
         for word in sentence.split():
             word = word.strip().lower()
-            if word in map:
-                map[word] += 1
+            if word in data_map:
+                data_map[word] += 1
             else:
-                map[word] = 1
-    return map
+                data_map[word] = 1
+    return data_map
 
 
-def add_listening_notes_to_anki_connect(deck_name, audio_paths_ordered, map, lang_code):
+def add_listening_notes_to_anki_connect(deck_name, audio_paths_ordered, data_map, lang_code):
     # note that if the note already exists, it won't be modified
     all_notes = []
     word_frequency_map = _build_word_frequency_map(list(audio_paths_ordered.values()))
     print("BEGINNING TO GENERATE LISTENING NOTES FROM SENTENCES")
     for audio_path in tqdm(audio_paths_ordered):
-        sentence = map[audio_path]
+        sentence = data_map[audio_path]
         note = {
                 "deckName": deck_name,
                 "modelName": "CommonVoice cloze note",
