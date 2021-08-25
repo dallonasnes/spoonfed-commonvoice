@@ -34,15 +34,15 @@ def invoke(action, **params):
 
 def _filter_out_punctuation(sentence):
     cleansed_sentence = '%s' % sentence # copy the same string
-    for word in sentence.split():
-        if word in string.punctuation or word in ['،', '؟']:
-            cleansed_sentence = cleansed_sentence.replace(word, '').strip()
+    for char in sentence:
+        if char in string.punctuation or char in {'!', '.', '،', '؟'}:
+            cleansed_sentence = cleansed_sentence.replace(char, '').strip()
     return cleansed_sentence.strip()
 
-def build_audio_path_to_sentence_map(args):
+def build_audio_path_to_sentence_map(tsv):
     data_map = {}
-    is_validated_file = "validated" in args.tsv.lower()
-    with open(args.tsv) as csv_file:
+    is_validated_file = "validated" in tsv.lower()
+    with open(tsv) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter='\t')
         line_count = 0
         for row in csv_reader:
@@ -51,11 +51,12 @@ def build_audio_path_to_sentence_map(args):
                 line_count += 1
             else:
                 audio_path = row[1]
-                sentence = _filter_out_punctuation(row[2])
+                sentence = row[2].strip()
                 up_votes = row[3]
                 down_votes = row[4]
                 if is_validated_file or (up_votes > 0 and down_votes == 0):
                     data_map[audio_path] = sentence
+                line_count += 1
     return data_map
 
 def format_google_translate_query(sentence, lang_code):
@@ -115,7 +116,7 @@ def add_reading_notes_to_anki_connect(deck_name, audio_paths_ordered, data_map, 
     all_notes = []
     print("BEGINNING TO GENERATE READING NOTES FROM SENTENCES")
     for audio_path in tqdm(audio_paths_ordered):
-        sentence = data_map[audio_path]
+        sentence = _filter_out_punctuation(data_map[audio_path])
         note = {
                 "deckName": deck_name,
                 "modelName": "CommonVoice note",
@@ -146,11 +147,11 @@ def copy_files_to_anki_store(relative_audio_paths: List, args):
             copyfile(src_path, dest_path)
     print("FINISHED COPYING FILES TO ANKI MEDIA STORE")
 
-def _invert_ordered_dict(map):
+def _invert_ordered_dict(data_map):
     # NB: CommonVoice has unique audio but many duplicate sentences
     # this method drastically reduces number of sentences by changing hash table key
     rtn_val = OrderedDict()
-    for key, value in map.items():
+    for key, value in data_map.items():
         if value not in rtn_val:
             rtn_val[value] = key
     return rtn_val
@@ -188,13 +189,23 @@ def _is_new_word_misspelling_of_old_word(just_seen_words, previously_seen_words)
             return True
     return False
 
-def _order_sentences_by_min_num_new_words(sentences, min_sentence_length, max_card_count):
+def _apply_sentence_filters(unused_sentences_init, min_sentence_length, only_sentence_mode):
+    rtn_val = unused_sentences_init.copy()
+    if only_sentence_mode:
+        # check if last char of sentence is punctuation
+        rtn_val = list(filter(lambda sentence: sentence[-1] in (string.punctuation or ['،', '؟']), rtn_val))
+    # now that we've checked for sentences by punctuation, can safely remove all punctuation
+    rtn_val = list(map(_filter_out_punctuation, rtn_val))
+    if min_sentence_length > 1:
+        rtn_val = list(filter(lambda x: len(x.split()) >= min_sentence_length, rtn_val))
+        
+    return sorted(rtn_val, key=len)
+
+def _order_sentences_by_min_num_new_words(sentences, min_sentence_length, max_card_count, only_sentence_mode):
     sentences_ordered_by_num_new_words = []
     sentences_ordered_count = 0
     unused_sentences_init = sentences.copy()
-    if min_sentence_length > 1:
-        unused_sentences_unsorted = list(filter(lambda x: len(x.split()) >= min_sentence_length, unused_sentences_init))
-        unused_sentences = sorted(unused_sentences_unsorted, key=len)
+    unused_sentences = _apply_sentence_filters(unused_sentences_init, min_sentence_length, only_sentence_mode)
     previously_seen_words = set()
     print("BEGINNING TO APPLY ORDERING TO {0} SENTENCES".format(len(unused_sentences)))
     with tqdm(total=max_card_count) as pbar:
@@ -247,8 +258,7 @@ def _order_sentences_by_min_num_new_words(sentences, min_sentence_length, max_ca
                 for word in sentence.split():
                     word = word.strip().lower()
                     previously_seen_words.add(word)
-    
-    print("FINISHED APPLYING ORDERING TO SENTENCES")
+
     return sentences_ordered_by_num_new_words        
 
 def _build_map_audio_to_sentence_ordered_by_min_new_words_in_sentence(sentences_ordered_by_min_num_new_words, sentence_to_audio_map):
@@ -258,21 +268,28 @@ def _build_map_audio_to_sentence_ordered_by_min_new_words_in_sentence(sentences_
         rtn_val[audio_path] = sentence
     return rtn_val
 
-def _order_sentences_by_num_new_words(deduped_ordered_map, min_sentence_length, max_card_count):
+def _filter_punctuation_from_sentence_to_audio_map(sentence_to_audio_map):
+    rtn_val = OrderedDict()
+    for sentence, audio_path in sentence_to_audio_map.items():
+        rtn_val[_filter_out_punctuation(sentence)] = audio_path
+    return rtn_val
+
+def _order_sentences_by_num_new_words(deduped_ordered_map, min_sentence_length, max_card_count, only_sentence_mode):
     sentence_to_audio_map = _invert_ordered_dict(deduped_ordered_map)
-    sentences_ordered_by_min_num_new_words = _order_sentences_by_min_num_new_words(list(sentence_to_audio_map.keys()), min_sentence_length, max_card_count)
-    map_audio_to_sentence_ordered_by_min_new_words_in_sentence = _build_map_audio_to_sentence_ordered_by_min_new_words_in_sentence(sentences_ordered_by_min_num_new_words, sentence_to_audio_map)
+    # TODO: now need to include puncuation in sentences when ordered, but should clean up later to only filter out punctuation once
+    sentences_ordered_by_min_num_new_words = _order_sentences_by_min_num_new_words(list(sentence_to_audio_map.keys()), min_sentence_length, max_card_count, only_sentence_mode)
+    sentence_to_audio_map_filtered_punctuation = _filter_punctuation_from_sentence_to_audio_map(sentence_to_audio_map)
+    map_audio_to_sentence_ordered_by_min_new_words_in_sentence = _build_map_audio_to_sentence_ordered_by_min_new_words_in_sentence(sentences_ordered_by_min_num_new_words, sentence_to_audio_map_filtered_punctuation)
     return map_audio_to_sentence_ordered_by_min_new_words_in_sentence
 
-def apply_ordering_to_notes(data_map, min_sentence_length, max_card_count):
+def apply_ordering_to_notes(data_map, min_sentence_length, max_card_count, only_sentence_mode):
     # order map by length of each sentence
     ordered_map = OrderedDict(sorted(data_map.items(), key=lambda t: len(t[1].split())))
     # reorder map by number of new words introduced in each sentence (compared to words previously seen)
-    map_ordered_by_num_new_words = _order_sentences_by_num_new_words(ordered_map, min_sentence_length, max_card_count)
+    map_ordered_by_num_new_words = _order_sentences_by_num_new_words(ordered_map, min_sentence_length, max_card_count, only_sentence_mode)
     return map_ordered_by_num_new_words
 
 def parse_cli():
-
     parser = argparse.ArgumentParser(description='Spoonfed CommonVoice CLI.')
     parser.add_argument("audio", help="path to audio directory (should end with /)")
     parser.add_argument("tsv", help="path to tsv file")
@@ -281,6 +298,7 @@ def parse_cli():
     parser.add_argument("length", help="minimum length of sentences to include in deck", type=int)
     parser.add_argument("count", help="max number of cards to include in deck", type=int)
     parser.add_argument("-l", "--listen", help="make a deck for listening practice as well", action="store_true")
+    parser.add_argument("-s", "--sentence", help="make a deck of only complete sentences", action="store_true")
 
     args = parser.parse_args()
     return args
@@ -288,7 +306,7 @@ def parse_cli():
 def run():
     args = parse_cli()
     # read the csv into memory
-    data_map = build_audio_path_to_sentence_map(args) # key is audio path, value is sentence
+    data_map = build_audio_path_to_sentence_map(args.tsv) # key is audio path, value is sentence
     print("CSV INPUT HAS {0} ROWS".format(len(data_map.keys())))
 
     reading_deck_name = 'CommonVoice::{0}::Reading Notes'.format(args.lang_name)
@@ -297,7 +315,7 @@ def run():
     if reading_deck_name not in existing_decks:
         invoke('createDeck', deck=reading_deck_name)
 
-    audio_paths_ordered = apply_ordering_to_notes(data_map, args.length, args.count)
+    audio_paths_ordered = apply_ordering_to_notes(data_map, args.length, args.count, args.sentence)
     copy_files_to_anki_store(audio_paths_ordered.keys(), args)
     print("FILTERED MAP HAS {0} ROWS".format(len(audio_paths_ordered.keys())))
     # always make reading notes
